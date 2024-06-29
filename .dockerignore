@@ -1,3 +1,6 @@
 secret.key
 passwords.db
 venv
+build
+dist
+main.spec
