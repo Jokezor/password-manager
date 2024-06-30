@@ -58,6 +58,8 @@ docker build -t password-manager .
 
 To run it with a persistent volume
 ```bash
-docker run -it --rm -v password_manager_data:/app/data -e PASSWORD_MANAGER_D
-B_PATH=/app/data/passwords.db -e PASSWORD_MANAGER_KEY_PATH=/app/data/secret.key password_manager
+docker run -it --rm -v password_manager_data:/app/data -e \
+PASSWORD_MANAGER_DB_PATH=/app/data/passwords.db -e \
+PASSWORD_MANAGER_KEY_PATH=/app/data/secret.key \
+password_manager
 ```

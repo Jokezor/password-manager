@@ -1,13 +1,12 @@
-from cryptography.fernet import Fernet
-import sqlite3
 import os
+from cryptography.fernet import Fernet, InvalidToken
+import sqlite3
 import getpass
 
 DB_PATH = os.getenv("PASSWORD_MANAGER_DB_PATH", "passwords.db")
 KEY_PATH = os.getenv("PASSWORD_MANAGER_KEY_PATH", "secret.key")
 
 
-# Generate a key for encryption/decryption
 def generate_key():
     key = Fernet.generate_key()
     with open(KEY_PATH, "wb") as key_file:
@@ -15,12 +14,10 @@ def generate_key():
     return key
 
 
-# Load the previously generated key
 def load_key():
     return open(KEY_PATH, "rb").read()
 
 
-# Initialize database
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -29,52 +26,57 @@ def init_db():
     conn.close()
 
 
-# Encrypt password
-def encrypt_password(password, key):
+def encrypt_data(data, key):
     f = Fernet(key)
-    encrypted_password = f.encrypt(password.encode())
-    return encrypted_password
+    encrypted_data = f.encrypt(data.encode())
+    return encrypted_data
 
 
-# Decrypt password
-def decrypt_password(encrypted_password, key):
+def decrypt_data(encrypted_data, key):
     f = Fernet(key)
-    decrypted_password = f.decrypt(encrypted_password).decode()
-    return decrypted_password
+    decrypted_data = f.decrypt(encrypted_data).decode()
+    return decrypted_data
 
 
-# Add a password
-def add_password(service, password):
-    key = load_key()
-    encrypted_password = encrypt_password(password, key)
+def add_password(service, password, key):
+    encrypted_password = encrypt_data(password, key)
+    encrypted_service = encrypt_data(service, key)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute(
         "INSERT INTO passwords (service, password) VALUES (?, ?)",
-        (service, encrypted_password),
+        (encrypted_service, encrypted_password),
     )
     conn.commit()
     conn.close()
 
 
-# Retrieve a password
-def get_password(service):
-    key = load_key()
+def get_password(service, key):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT password FROM passwords WHERE service=?", (service,))
-    encrypted_password = c.fetchone()
+
+    c.execute("SELECT service, password FROM passwords")
+    encrypted_data = c.fetchall()
     conn.close()
-    if encrypted_password:
-        return decrypt_password(encrypted_password[0], key)
-    else:
-        return None
+
+    for encrypted_service, password in encrypted_data:
+        try:
+            decrypted_service = decrypt_data(encrypted_service, key)
+            if decrypted_service == service:
+                return decrypt_data(password, key)
+        except InvalidToken:
+            continue
+
+    print("Service not found or invalid key.")
+    return None
 
 
-# Main function
 if __name__ == "__main__":
     if not os.path.exists(KEY_PATH):
         generate_key()
+
+    secret_key = load_key()
+
     init_db()
     print("Password Manager")
     while True:
@@ -82,10 +84,10 @@ if __name__ == "__main__":
         if choice == "1":
             service = input("Enter the service: ")
             password = getpass.getpass("Enter the password: ")
-            add_password(service, password)
+            add_password(service, password, secret_key)
         elif choice == "2":
             service = input("Enter the service: ")
-            password = get_password(service)
+            password = get_password(service, secret_key)
             if password:
                 print(f"Password for {service}: {password}")
             else:
